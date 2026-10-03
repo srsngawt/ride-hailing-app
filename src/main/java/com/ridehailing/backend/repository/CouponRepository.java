@@ -22,4 +22,8 @@ public class CouponRepository {
     public Optional<Coupon> findByCode(String code) {
         return Optional.ofNullable(coupons.get(code));
     }
+
+    public java.util.List<Coupon> findAll() {
+        return new java.util.ArrayList<>(coupons.values());
+    }
 }

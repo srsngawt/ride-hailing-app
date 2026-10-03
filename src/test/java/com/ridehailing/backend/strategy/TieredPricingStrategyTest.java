@@ -18,10 +18,9 @@ class TieredPricingStrategyTest {
 
     @Test
     void testMinimumFare() {
-        Ride ride = Ride.builder()
-                .assignedCarType(CarType.HATCHBACK) // 1.0 multiplier
-                .isFreeUpgrade(false)
-                .build();
+        Ride ride = new Ride();
+        ride.setAssignedCarType(CarType.HATCHBACK);
+        ride.setFreeUpgrade(false);
         
         // 1 km should be 1 * 10 = 10, but min fare is 50
         double fare = pricingStrategy.calculateFare(ride, 1.0);
@@ -30,10 +29,9 @@ class TieredPricingStrategyTest {
 
     @Test
     void testTieredPricing_FirstTier() {
-        Ride ride = Ride.builder()
-                .assignedCarType(CarType.HATCHBACK)
-                .isFreeUpgrade(false)
-                .build();
+        Ride ride = new Ride();
+        ride.setAssignedCarType(CarType.HATCHBACK);
+        ride.setFreeUpgrade(false);
         
         // 2 km = 2 * 10 = 20, min fare 50 applies
         double fare = pricingStrategy.calculateFare(ride, 2.0);
@@ -42,10 +40,9 @@ class TieredPricingStrategyTest {
 
     @Test
     void testTieredPricing_SecondTier() {
-        Ride ride = Ride.builder()
-                .assignedCarType(CarType.HATCHBACK)
-                .isFreeUpgrade(false)
-                .build();
+        Ride ride = new Ride();
+        ride.setAssignedCarType(CarType.HATCHBACK);
+        ride.setFreeUpgrade(false);
         
         // 4 km = (2 * 10) + (2 * 8) = 20 + 16 = 36, min fare 50 applies
         double fare = pricingStrategy.calculateFare(ride, 4.0);
@@ -54,10 +51,9 @@ class TieredPricingStrategyTest {
 
     @Test
     void testTieredPricing_ThirdTier() {
-        Ride ride = Ride.builder()
-                .assignedCarType(CarType.HATCHBACK)
-                .isFreeUpgrade(false)
-                .build();
+        Ride ride = new Ride();
+        ride.setAssignedCarType(CarType.HATCHBACK);
+        ride.setFreeUpgrade(false);
         
         // 10 km = (2 * 10) + (3 * 8) + (5 * 5) = 20 + 24 + 25 = 69
         double fare = pricingStrategy.calculateFare(ride, 10.0);
@@ -66,10 +62,9 @@ class TieredPricingStrategyTest {
 
     @Test
     void testCarTypePremiumRate() {
-        Ride ride = Ride.builder()
-                .assignedCarType(CarType.SEDAN) // 1.2 multiplier
-                .isFreeUpgrade(false)
-                .build();
+        Ride ride = new Ride();
+        ride.setAssignedCarType(CarType.SEDAN);
+        ride.setFreeUpgrade(false);
         
         // 10 km = 69 base fare. 69 * 1.2 = 82.8
         double fare = pricingStrategy.calculateFare(ride, 10.0);
@@ -78,11 +73,10 @@ class TieredPricingStrategyTest {
 
     @Test
     void testFreeUpgradePricing() {
-        Ride ride = Ride.builder()
-                .requestedCarType(CarType.HATCHBACK) // 1.0 multiplier
-                .assignedCarType(CarType.SEDAN)      // 1.2 multiplier, but should be ignored
-                .isFreeUpgrade(true)
-                .build();
+        Ride ride = new Ride();
+        ride.setRequestedCarType(CarType.HATCHBACK);
+        ride.setAssignedCarType(CarType.SEDAN);
+        ride.setFreeUpgrade(true);
         
         // 10 km = 69 base fare. Should multiply by HATCHBACK (1.0), not SEDAN
         double fare = pricingStrategy.calculateFare(ride, 10.0);

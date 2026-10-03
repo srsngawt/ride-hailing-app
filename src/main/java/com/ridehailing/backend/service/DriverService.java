@@ -5,21 +5,27 @@ import com.ridehailing.backend.domain.Driver;
 import com.ridehailing.backend.domain.Location;
 import com.ridehailing.backend.exception.RideHailingException;
 import com.ridehailing.backend.repository.DriverRepository;
-import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 @Service
-@RequiredArgsConstructor
 public class DriverService {
     private final DriverRepository driverRepository;
 
+    public DriverService(DriverRepository driverRepository) {
+        this.driverRepository = driverRepository;
+    }
+
     public Driver registerDriver(String name, CarType carType, Location initialLocation) {
-        Driver driver = Driver.builder()
-                .name(name)
-                .carType(carType)
-                .currentLocation(initialLocation)
-                .available(true)
-                .build();
+        if (name == null || name.trim().isEmpty()) {
+            throw new RideHailingException("Driver name cannot be empty");
+        }
+        if (carType == null) {
+            throw new RideHailingException("Car type cannot be empty");
+        }
+        if (initialLocation == null) {
+            throw new RideHailingException("Initial location cannot be empty");
+        }
+        Driver driver = new Driver(null, name, carType, initialLocation, true);
         return driverRepository.save(driver);
     }
 
@@ -33,5 +39,10 @@ public class DriverService {
     public Driver getDriver(Long id) {
         return driverRepository.findById(id)
                 .orElseThrow(() -> new RideHailingException("Driver not found"));
+    }
+
+    public void deleteDriver(Long id) {
+        driverRepository.findById(id).orElseThrow(() -> new RideHailingException("Driver not found"));
+        driverRepository.deleteById(id);
     }
 }

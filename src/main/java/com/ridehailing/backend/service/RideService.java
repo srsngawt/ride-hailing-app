@@ -7,7 +7,6 @@ import com.ridehailing.backend.repository.RideRepository;
 import com.ridehailing.backend.repository.UserRepository;
 import com.ridehailing.backend.strategy.DriverMatchingStrategy;
 import com.ridehailing.backend.strategy.PricingStrategy;
-import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -16,7 +15,6 @@ import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
 @Service
-@RequiredArgsConstructor
 public class RideService {
 
     private final UserRepository userRepository;
@@ -32,7 +30,20 @@ public class RideService {
     // Lock for concurrency safety during booking
     private final Lock bookingLock = new ReentrantLock();
 
-    public Ride bookRide(Long userId, Location startLocation, CarType requestedCarType, String couponCode) {
+    public RideService(UserRepository userRepository, DriverRepository driverRepository, RideRepository rideRepository, CouponService couponService, DriverMatchingStrategy matchingStrategy, PricingStrategy pricingStrategy) {
+        this.userRepository = userRepository;
+        this.driverRepository = driverRepository;
+        this.rideRepository = rideRepository;
+        this.couponService = couponService;
+        this.matchingStrategy = matchingStrategy;
+        this.pricingStrategy = pricingStrategy;
+    }
+
+    public Ride bookRide(Long userId, Location startLocation, Location endLocation, CarType requestedCarType, String couponCode) {
+        if (endLocation == null) {
+            throw new RideHailingException("Destination (endLocation) is required to book a ride.");
+        }
+
         // Validate user
         userRepository.findById(userId).orElseThrow(() -> new RideHailingException("User not found"));
         
@@ -52,17 +63,29 @@ public class RideService {
 
             boolean isFreeUpgrade = (requestedCarType == CarType.HATCHBACK && selectedDriver.getCarType() == CarType.SEDAN);
 
-            Ride ride = Ride.builder()
-                    .userId(userId)
-                    .driverId(selectedDriver.getId())
-                    .startLocation(startLocation)
-                    .requestedCarType(requestedCarType)
-                    .assignedCarType(selectedDriver.getCarType())
-                    .isFreeUpgrade(isFreeUpgrade)
-                    .status(RideStatus.ONGOING)
-                    .startTime(LocalDateTime.now())
-                    .appliedCouponCode(appliedCoupon != null ? appliedCoupon.getCode() : null)
-                    .build();
+            Ride ride = new Ride();
+            ride.setUserId(userId);
+            ride.setDriverId(selectedDriver.getId());
+            ride.setStartLocation(startLocation);
+            ride.setEndLocation(endLocation); // Driver gets the destination
+            
+            ride.setRequestedCarType(requestedCarType);
+            ride.setAssignedCarType(selectedDriver.getCarType());
+            ride.setFreeUpgrade(isFreeUpgrade);
+            
+            ride.setStatus(RideStatus.ONGOING);
+            ride.setStartTime(LocalDateTime.now());
+            ride.setAppliedCouponCode(appliedCoupon != null ? appliedCoupon.getCode() : null);
+
+            // Calculate ESTIMATED Fare & Distance
+            double estDist = startLocation.distanceTo(endLocation);
+            ride.setEstimatedDistance(estDist);
+            
+            double estFare = pricingStrategy.calculateFare(ride, estDist);
+            if (appliedCoupon != null) {
+                estFare = estFare - (estFare * (appliedCoupon.getDiscountPercentage() / 100.0));
+            }
+            ride.setEstimatedFare(estFare);
 
             return rideRepository.save(ride);
         } finally {
@@ -70,20 +93,25 @@ public class RideService {
         }
     }
 
-    public Ride endRide(Long rideId, Location endLocation) {
+    public Ride endRide(Long rideId, Location actualEndLocation) {
         Ride ride = rideRepository.findById(rideId).orElseThrow(() -> new RideHailingException("Ride not found"));
         if (ride.getStatus() != RideStatus.ONGOING) {
             throw new RideHailingException("Ride is not ongoing");
         }
 
-        ride.setEndLocation(endLocation);
+        // If actualEndLocation is not provided (e.g. driver followed maps exactly), use original endLocation
+        Location finalLocation = (actualEndLocation != null) ? actualEndLocation : ride.getEndLocation();
+        
+        // Update ride with actual details
+        ride.setEndLocation(finalLocation);
         ride.setEndTime(LocalDateTime.now());
         ride.setStatus(RideStatus.COMPLETED);
         
-        double distance = ride.getStartLocation().distanceTo(endLocation);
-        ride.setDistance(distance);
+        double actualDistance = ride.getStartLocation().distanceTo(finalLocation);
+        ride.setActualDistance(actualDistance);
 
-        double totalFare = pricingStrategy.calculateFare(ride, distance);
+        // Recalculate ACTUAL total fare based on final actual distance
+        double totalFare = pricingStrategy.calculateFare(ride, actualDistance);
 
         // Apply coupon if exists
         if (ride.getAppliedCouponCode() != null) {
@@ -95,9 +123,10 @@ public class RideService {
         
         ride.setTotalFare(totalFare);
 
-        // Free the driver
+        // Free the driver and update their current location to the drop-off point
         Driver driver = driverRepository.findById(ride.getDriverId()).orElseThrow();
         driver.setAvailable(true);
+        driver.setCurrentLocation(finalLocation);
         driverRepository.save(driver);
 
         return rideRepository.save(ride);

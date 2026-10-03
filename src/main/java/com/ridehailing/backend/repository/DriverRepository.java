@@ -32,4 +32,8 @@ public class DriverRepository {
                 .filter(Driver::isAvailable)
                 .toList();
     }
+
+    public void deleteById(Long id) {
+        drivers.remove(id);
+    }
 }
